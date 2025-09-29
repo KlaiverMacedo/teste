@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistema de Gestão de Vouchers</title>
+
+    <!-- Bibliotecas Externas -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script
+      src="https://unpkg.com/html5-qrcode"
+      type="text/javascript"
+    ></script>
+
+    <style>
+      /* Variáveis CSS para Cores e Estilos (Baseado no seu style.css) */
+      :root {
+        --primary-color: #0d6efd;
+        --secondary-color: rgb(59, 32, 136); /* Roxo Escuro */
+        --particle-bg-color: #f3f4f6; /* Fundo do Conteúdo */
+        --interactive-particle-color: #ef4444; /* Partícula Vermelha (Clique/Mouse) */
+        --background-particle-color: rgba(
+          59,
+          32,
+          136,
+          0.1
+        ); /* Partícula de Fundo */
+      }
+
+      /* Estilos do Canvas (particles.css) */
+      canvas#particles {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: -1;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      /* Layout Principal */
+      body,
+      html {
+        margin: 0;
+        padding: 0;
+        overflow-x: hidden;
+        font-family: "Inter", sans-serif;
+      }
+      .wrapper {
+        display: flex;
+        min-height: 100vh;
+        background-color: var(--particle-bg-color);
+      }
+
+      /* Sidebar Customizada (style.css) */
+      .sidebar {
+        width: 250px;
+        padding: 1.5rem 0;
+        background: var(--secondary-color);
+        color: white;
+        box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2);
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+      }
+      .sidebar h2 {
+        padding: 0 1.5rem 1.5rem;
+        font-size: 1.5rem;
+        text-align: center;
+      }
+      .sidebar ul {
+        list-style: none;
+        padding: 0;
+      }
+      .sidebar li a {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        color: white;
+        text-decoration: none;
+        padding: 10px 1.5rem;
+        margin-bottom: 5px;
+        border-radius: 5px;
+        transition: background-color 0.3s ease;
+      }
+      .sidebar li a:hover {
+        background-color: #4f46e5;
+      }
+      .sidebar li a.active {
+        background-color: var(--primary-color);
+      }
+      .sidebar li a svg {
+        width: 1.25rem;
+        height: 1.25rem;
+      }
+
+      /* Conteúdo Principal */
+      .content {
+        flex-grow: 1;
+        padding: 2rem;
+        overflow-y: auto;
+      }
+      .content-section {
+        display: none;
+        max-width: 1000px;
+        margin: 0 auto;
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      .content-section.active {
+        display: block;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Estilos de Formulário (Baseado no seu style.css) */
+      .form-section {
+        background-color: var(--secondary-color);
+        color: white;
+        padding: 2.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      /* Toast Notifications */
+      #toast-container {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 1000;
+      }
+      .toast {
+        padding: 1rem;
+        border-radius: 0.375rem;
+        margin-bottom: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        color: white;
+        animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 2.5s forwards;
+        min-width: 250px;
+      }
+      .toast.success {
+        background-color: #10b981;
+      } /* Green 500 */
+      .toast.error {
+        background-color: #ef4444;
+      } /* Red 500 */
+      .toast.info {
+        background-color: #3b82f6;
+      } /* Blue 500 */
+
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes fadeOut {
+        to {
+          opacity: 0;
+          display: none;
+        }
+      }
+
+      /* Estilos do Validador (validador.html) */
+      .scanner-container {
+        border: 2px solid #ccc;
+        border-radius: 0.5rem;
+        padding: 0.5rem;
+        background-color: #000;
+      }
+      .result-box {
+        margin-top: 1.5rem;
+        padding: 1.25rem;
+        border-radius: 0.5rem;
+        text-align: center;
+      }
+      .result-box.valid {
+        background-color: #d1fae5;
+        color: #065f46;
+        border: 1px solid #10b981;
+      }
+      .result-box.invalid {
+        background-color: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #ef4444;
+      }
+
+      /* Estilos de Impressão (Ticket) */
+      @media print {
+        body {
+          background: none;
+          margin: 0;
+          padding: 0;
+        }
+        .voucher {
+          width: auto; /* Ajusta automaticamente para a largura da impressora */
+          height: auto;
+          padding: 10px;
+          border: 1px dashed #000;
+          margin: 5px;
+          display: inline-block;
+          text-align: center;
+          vertical-align: top;
+          box-sizing: border-box;
+          page-break-inside: avoid; /* Evita quebras no meio do voucher */
+        }
+        .voucher h4 {
+          font-size: 14px;
+          font-weight: bold;
+          margin: 0 0 5px 0;
+        }
+        .voucher p {
+          font-size: 10px;
+          margin: 0;
+        }
+        .qrcode {
+          margin: 5px auto;
+        }
+        .numeracao {
+          font-size: 12px;
+          font-weight: bold;
+          margin-bottom: 5px;
+        }
+        .detalhes {
+          font-size: 10px;
+          margin-bottom: 5px;
+        }
+
+        /* Oculta tudo que não for o container de impressão */
+        body > *:not(.print-only) {
+          display: none !important;
+        }
+        .print-only {
+          display: block !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="particles"></canvas>
+    <div id="toast-container"></div>
+
+    <div class="wrapper">
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <h2>Sistema de Vouchers</h2>
+        <ul id="menu-navegacao">
+          <li>
+            <a href="#cadastro" class="menu-item active"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-calendar-plus"
+              >
+                <path
+                  d="M21 13V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"
+                />
+                <line x1="16" x2="16" y1="2" y2="6" />
+                <line x1="8" x2="8" y1="2" y2="6" />
+                <line x1="3" x2="21" y1="10" y2="10" />
+                <line x1="19" x2="19" y1="16" y2="22" />
+                <line x1="16" x2="22" y1="19" y2="19" />
+              </svg>
+              Cadastrar Evento</a
+            >
+          </li>
+          <li>
+            <a href="#geracao" class="menu-item"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-ticket-plus"
+              >
+                <path
+                  d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"
+                />
+                <path d="M9 7h6" />
+                <path d="M12 9v6" />
+              </svg>
+              Gerar Vouchers</a
+            >
+          </li>
+          <li>
+            <a href="#acesso" class="menu-item"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-printer"
+              >
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path
+                  d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"
+                />
+                <rect width="12" height="8" x="6" y="14" />
+              </svg>
+              Imprimir Vouchers</a
+            >
+          </li>
+          <li>
+            <a href="#relatorios" class="menu-item"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-bar-chart-3"
+              >
+                <path d="M3 3v18h18" />
+                <path d="M18 17V9" />
+                <path d="M13 17V5" />
+                <path d="M8 17v-3" />
+              </svg>
+              Relatórios</a
+            >
+          </li>
+          <li>
+            <a href="#validador" class="menu-item"
+              ><svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="lucide lucide-qr-code"
+              >
+                <rect width="18" height="18" x="3" y="3" rx="2" />
+                <path d="M7.5 7.5h.01" />
+                <path d="M12 7.5h.01" />
+                <path d="M4.5 12h.01" />
+                <path d="M16.5 7.5h.01" />
+                <path d="M7.5 12h.01" />
+                <path d="M12 12h.01" />
+                <path d="M12 16.5h.01" />
+                <path d="M7.5 16.5h.01" />
+                <path d="M16.5 16.5h.01" />
+                <path d="M16.5 12h.01" />
+              </svg>
+              Validador (Scanner)</a
+            >
+          </li>
+        </ul>
+      </div>
+
+      <!-- Conteúdo Principal -->
+      <div class="content">
+        <!-- 1. Cadastro de Evento -->
+        <div id="cadastro" class="content-section active">
+          <h2 class="text-3xl font-bold mb-6 text-gray-800">
+            Cadastrar Evento
+          </h2>
+          <div class="form-section">
+            <form id="form-evento">
+              <div class="mb-4">
+                <label for="nomeEvento" class="block text-sm font-medium mb-1"
+                  >Nome do Evento</label
+                >
+                <input
+                  type="text"
+                  class="w-full p-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500"
+                  id="nomeEvento"
+                  required
+                />
+              </div>
+              <div class="mb-4">
+                <label for="dataEvento" class="block text-sm font-medium mb-1"
+                  >Data do Evento</label
+                >
+                <input
+                  type="date"
+                  class="w-full p-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500"
+                  id="dataEvento"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+              >
+                Cadastrar Evento
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- 2. Geração de Vouchers -->
+        <div id="geracao" class="content-section">
+          <h2 class="text-3xl font-bold mb-6 text-gray-800">Gerar Vouchers</h2>
+          <div class="form-section">
+            <form id="form-vouchers">
+              <div class="mb-4">
+                <label for="eventoSelect" class="block text-sm font-medium mb-1"
+                  >Escolha o Evento</label
+                >
+                <select
+                  class="w-full p-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500"
+                  id="eventoSelect"
+                  required
+                >
+                  <option value="">Carregando eventos...</option>
+                </select>
+              </div>
+              <div class="mb-4">
+                <label
+                  for="quantidadeVouchers"
+                  class="block text-sm font-medium mb-1"
+                  >Quantidade de Vouchers</label
+                >
+                <input
+                  type="number"
+                  class="w-full p-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500"
+                  id="quantidadeVouchers"
+                  min="1"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+              >
+                Gerar e Imprimir Vouchers
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- 3. Acesso e Impressão de Vouchers -->
+        <div id="acesso" class="content-section">
+          <h2 class="text-3xl font-bold mb-6 text-gray-800">
+            Acessar e Imprimir Vouchers
+          </h2>
+          <div class="form-section">
+            <form id="form-acessar-vouchers">
+              <div class="mb-4">
+                <label
+                  for="eventoAcessarSelect"
+                  class="block text-sm font-medium mb-1"
+                  >Escolha o Evento</label
+                >
+                <select
+                  class="w-full p-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500"
+                  id="eventoAcessarSelect"
+                  required
+                >
+                  <option value="">Carregando eventos...</option>
+                </select>
+              </div>
+              <div class="mb-4">
+                <label
+                  for="tamanhoImpressao"
+                  class="block text-sm font-medium mb-1"
+                  >Tamanho da Impressão (Impressora Térmica)</label
+                >
+                <select
+                  class="w-full p-2 border border-gray-600 rounded-md bg-gray-700 text-white focus:ring-blue-500 focus:border-blue-500"
+                  id="tamanhoImpressao"
+                  required
+                >
+                  <option value="58">58mm</option>
+                  <option value="80">80mm</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+              >
+                Acessar e Imprimir Todos
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- 4. Relatórios -->
+        <div id="relatorios" class="content-section">
+          <h2 class="text-3xl font-bold mb-6 text-gray-800">
+            Relatórios de Uso
+          </h2>
+          <div class="bg-white p-6 rounded-lg shadow-xl overflow-x-auto">
+            <table
+              class="min-w-full divide-y divide-gray-200"
+              id="tabela-relatorios"
+            >
+              <thead class="bg-gray-50">
+                <tr>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    ID
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Evento
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Data
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Total
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Ativos
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Usados
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    Expirados
+                  </th>
+                  <th
+                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                  >
+                    % Uso
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                <tr>
+                  <td colspan="8" class="text-center py-4 text-gray-500">
+                    Clique na aba Relatórios para carregar.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 5. Validador (Scanner) -->
+        <div id="validador" class="content-section">
+          <h2 class="text-3xl font-bold mb-6 text-gray-800">
+            Validador de Vouchers
+          </h2>
+          <div class="max-w-xl mx-auto">
+            <p class="text-center text-gray-600 mb-4">
+              Aponte a câmera para o QR Code do voucher para validar o uso.
+            </p>
+
+            <div class="scanner-container">
+              <div id="qr-reader" class="w-full"></div>
+            </div>
+
+            <div
+              id="qr-result"
+              class="result-box bg-gray-100 border border-gray-300"
+            >
+              <p class="text-gray-700">Aguardando leitura...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ====================================================================
+      // CONFIGURAÇÃO GERAL
+      // ====================================================================
+
+      // URL base da sua API Flask (Roda na porta 5000)
+      const API_URL = "http://127.0.0.1:5000";
+
+      // Variável global para a instância do leitor QR Code
+      let html5QrCode = null;
+
+      document.addEventListener("DOMContentLoaded", () => {
+        // Inicializa a interface e carrega dados
+        iniciarInterface();
+
+        // Inicia o loop de animação do fundo
+        initBackground();
+        animate();
+
+        // Configura os ícones do Lucide
+        lucide.createIcons();
+      });
+
+      function iniciarInterface() {
+        carregarEventosParaSelects();
+
+        // Configura eventos de formulário
+        document
+          .getElementById("form-evento")
+          .addEventListener("submit", cadastrarEvento);
+        document
+          .getElementById("form-vouchers")
+          .addEventListener("submit", gerarVouchers);
+        document
+          .getElementById("form-acessar-vouchers")
+          .addEventListener("submit", acessarVouchers);
+
+        // Lógica para navegação do menu e ativação de seções
+        document.querySelectorAll(".menu-item").forEach((item) => {
+          item.addEventListener("click", (e) => {
+            const target = e.currentTarget.getAttribute("href");
+
+            if (target && target.startsWith("#")) {
+              e.preventDefault();
+              const targetId = target.substring(1);
+
+              // Garante que o leitor de QR Code seja gerenciado corretamente
+              if (targetId === "validador") {
+                mostrarSecao(targetId, true);
+              } else {
+                mostrarSecao(targetId, false);
+                if (targetId === "relatorios") {
+                  carregarRelatorios();
+                }
+              }
+
+              // Atualiza a classe 'active' do menu
+              document
+                .querySelectorAll(".menu-item")
+                .forEach((link) => link.classList.remove("active"));
+              e.currentTarget.classList.add("active");
+            }
+          });
+        });
+
+        // Mostra a seção inicial (padrão)
+        mostrarSecao("cadastro", false);
+      }
+
+      /**
+       * Gerencia a visibilidade das seções e o estado do scanner.
+       * @param {string} id ID da seção a ser mostrada.
+       * @param {boolean} isValidador Indica se a seção é o Validador.
+       */
+      function mostrarSecao(id, isValidador) {
+        // Esconde todas as seções
+        document.querySelectorAll(".content-section").forEach((section) => {
+          section.classList.remove("active");
+        });
+
+        // Mostra a seção desejada
+        const targetSection = document.getElementById(id);
+        if (targetSection) {
+          targetSection.classList.add("active");
+        }
+
+        // Gerenciamento do Scanner
+        if (isValidador) {
+          iniciarLeitor();
+        } else if (html5QrCode) {
+          // Para o scanner se ele estiver ativo e o usuário mudou de seção
+          html5QrCode
+            .stop()
+            .then(() => {
+              console.log("Leitor de QR Code parado.");
+            })
+            .catch((err) => {
+              // Ocorre se o leitor já estiver parado, ignorar
+            });
+          html5QrCode = null;
+          // Reseta o resultado
+          const resultDiv = document.getElementById("qr-result");
+          resultDiv.className = "result-box bg-gray-100 border border-gray-300";
+          resultDiv.innerHTML =
+            '<p class="text-gray-700">Aguardando leitura...</p>';
+        }
+      }
+
+      /**
+       * Exibe uma notificação Toast na tela.
+       * @param {string} message A mensagem a ser exibida.
+       * @param {('success'|'error'|'info')} type O tipo da notificação.
+       */
+      function showToast(message, type = "info") {
+        const container = document.getElementById("toast-container");
+        if (!container) return;
+
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+
+        container.appendChild(toast);
+
+        // Remove o toast após a animação de fadeOut
+        setTimeout(() => {
+          container.removeChild(toast);
+        }, 3000);
+      }
+
+      // ====================================================================
+      // LÓGICA DE COMUNICAÇÃO (server.js + validador.js)
+      // ====================================================================
+
+      async function carregarEventosParaSelects() {
+        const selects = ["eventoSelect", "eventoAcessarSelect"];
+        const initialOption =
+          '<option value="">-- Selecione um evento --</option>';
+
+        selects.forEach((id) => {
+          const select = document.getElementById(id);
+          if (select)
+            select.innerHTML =
+              '<option value="">Carregando eventos...</option>';
+        });
+
+        try {
+          const response = await fetch(`${API_URL}/eventos`);
+          const eventos = await response.json();
+
+          selects.forEach((id) => {
+            const select = document.getElementById(id);
+            if (select) select.innerHTML = initialOption;
+            eventos.forEach((evento) => {
+              const option = document.createElement("option");
+              option.value = evento.id;
+              option.textContent = evento.nome;
+              if (select) select.appendChild(option);
+            });
+          });
+        } catch (error) {
+          console.error("Erro ao carregar eventos:", error);
+          selects.forEach((id) => {
+            const select = document.getElementById(id);
+            if (select)
+              select.innerHTML = '<option value="">Erro ao carregar</option>';
+          });
+          showToast("Erro ao carregar lista de eventos.", "error");
+        }
+      }
+
+      async function cadastrarEvento(event) {
+        event.preventDefault();
+
+        const nome = document.getElementById("nomeEvento").value;
+        const data = document.getElementById("dataEvento").value;
+
+        try {
+          const response = await fetch(`${API_URL}/evento`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nome, data }),
+          });
+          const result = await response.json();
+
+          if (response.ok) {
+            showToast("Evento cadastrado com sucesso!", "success");
+            document.getElementById("form-evento").reset();
+            carregarEventosParaSelects();
+            carregarRelatorios(); // Atualiza a lista de relatórios
+          } else {
+            showToast(`Erro ao cadastrar: ${result.erro}`, "error");
+          }
+        } catch (error) {
+          console.error("Erro ao cadastrar evento:", error);
+          showToast("Erro ao se conectar com o servidor.", "error");
+        }
+      }
+
+      async function gerarVouchers(event) {
+        event.preventDefault();
+
+        const eventoId = document.getElementById("eventoSelect").value;
+        const quantidade = document.getElementById("quantidadeVouchers").value;
+
+        if (!eventoId || !quantidade) {
+          showToast(
+            "Por favor, selecione um evento e uma quantidade.",
+            "error"
+          );
+          return;
+        }
+
+        showToast("Gerando vouchers, aguarde...", "info");
+
+        try {
+          const response = await fetch(`${API_URL}/vouchers/gerar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              evento_id: parseInt(eventoId),
+              quantidade: parseInt(quantidade),
+            }),
+          });
+          const result = await response.json();
+
+          if (response.ok) {
+            showToast(`Sucesso! ${quantidade} vouchers gerados.`, "success");
+            carregarRelatorios();
+            gerarPaginaDeImpressao(result.vouchers);
+          } else {
+            showToast(`Erro: ${result.erro}`, "error");
+          }
+        } catch (error) {
+          console.error("Erro ao gerar vouchers:", error);
+          showToast("Erro ao se conectar com o servidor.", "error");
+        }
+      }
+
+      async function acessarVouchers(event) {
+        event.preventDefault();
+
+        const eventoId = document.getElementById("eventoAcessarSelect").value;
+        const tamanho = document.getElementById("tamanhoImpressao").value;
+
+        if (!eventoId) {
+          showToast("Por favor, selecione um evento.", "error");
+          return;
+        }
+
+        showToast("Buscando vouchers para impressão...", "info");
+
+        try {
+          const response = await fetch(`${API_URL}/vouchers/${eventoId}`);
+          const result = await response.json();
+
+          if (response.ok) {
+            gerarPaginaDeImpressao(result.vouchers, tamanho);
+          } else {
+            showToast(`Erro: ${result.erro}`, "error");
+          }
+        } catch (error) {
+          console.error("Erro ao acessar vouchers:", error);
+          showToast("Erro ao se conectar com o servidor.", "error");
+        }
+      }
+
+      function gerarPaginaDeImpressao(vouchers, tamanho = "58") {
+        if (vouchers.length === 0) {
+          showToast("Nenhum voucher para imprimir.", "info");
+          return;
+        }
+
+        showToast(
+          `Preparando ${vouchers.length} vouchers para impressão em ${tamanho}mm.`,
+          "info"
+        );
+
+        const impressaoJanela = window.open("", "_blank");
+        if (!impressaoJanela) {
+          showToast(
+            "Não foi possível abrir a janela de impressão. Verifique o bloqueador de pop-ups.",
+            "error"
+          );
+          return;
+        }
+
+        // HTML base para a janela de impressão
+        impressaoJanela.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Vouchers para Impressão</title>
+                    <style>
+                        body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; }
+                        .print-only { padding: 10px; }
+                        .voucher {
+                            width: ${tamanho}mm;
+                            min-height: 50px;
+                            padding: 10px;
+                            border: 1px dashed #000;
+                            margin: 5px;
+                            display: inline-block;
+                            text-align: center;
+                            vertical-align: top;
+                            box-sizing: border-box;
+                        }
+                        .voucher h4 { font-size: 12px; font-weight: bold; margin: 0 0 5px 0; }
+                        .voucher p { font-size: 8px; margin: 0; }
+                        .qrcode { margin: 5px auto; }
+                        .numeracao { font-size: 10px; font-weight: bold; margin-bottom: 5px; }
+                        .detalhes { font-size: 9px; margin-bottom: 5px; }
+                        
+                        @media print {
+                             /* Estilo para quebra de página */
+                            .voucher { page-break-after: always; }
+                            .voucher:last-child { page-break-after: auto; }
+                            .print-only { padding: 0 !important; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div id="container-vouchers" class="print-only"></div>
+                </body>
+                </html>
+            `);
+
+        const container =
+          impressaoJanela.document.getElementById("container-vouchers");
+        const totalVouchers = vouchers.length;
+
+        vouchers.forEach((voucher, index) => {
+          const voucherDiv = impressaoJanela.document.createElement("div");
+          voucherDiv.className = "voucher";
+          voucherDiv.innerHTML = `
+                    <h4>VOUCHER DE ALMOÇO</h4>
+                    <div class="numeracao">
+                        ${index + 1} de ${totalVouchers}
+                    </div>
+                    <div class="detalhes">
+                        <p>Evento: ${voucher.nome_evento}</p>
+                        <p>Data: ${voucher.data_formatada}</p>
+                    </div>
+                    <div class="qrcode" id="qrcode-${voucher.id}"></div>
+                    <p>${voucher.codigo}</p>
+                `;
+          container.appendChild(voucherDiv);
+
+          // Geração do QR Code
+          new QRCode(
+            impressaoJanela.document.getElementById(`qrcode-${voucher.id}`),
+            {
+              text: voucher.codigo,
+              width: 100,
+              height: 100,
+            }
+          );
+        });
+
+        impressaoJanela.document.close();
+        // Dá um pequeno atraso para a renderização do QR Code antes de imprimir
+        setTimeout(() => {
+          impressaoJanela.focus();
+          impressaoJanela.print();
+        }, 500);
+      }
+
+      async function carregarRelatorios() {
+        const tbody = document.querySelector("#tabela-relatorios tbody");
+        tbody.innerHTML =
+          '<tr><td colspan="8" class="text-center py-4 text-gray-500">Carregando...</td></tr>';
+
+        try {
+          const response = await fetch(`${API_URL}/relatorios`);
+          const relatorios = await response.json();
+
+          tbody.innerHTML = "";
+          if (relatorios.length === 0) {
+            tbody.innerHTML =
+              '<tr><td colspan="8" class="text-center py-4 text-gray-500">Nenhum evento encontrado.</td></tr>';
+            return;
+          }
+
+          relatorios.forEach((relatorio) => {
+            const row = tbody.insertRow();
+            row.className = "hover:bg-gray-50";
+            row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${relatorio.id}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${relatorio.nome}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${relatorio.data_evento}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${relatorio.total_vouchers}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-semibold">${relatorio.ativos}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">${relatorio.usados}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-semibold">${relatorio.expirados}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">${relatorio.percentual_uso}%</td>
+                    `;
+          });
+        } catch (error) {
+          console.error("Erro ao carregar relatórios:", error);
+          tbody.innerHTML =
+            '<tr><td colspan="8" class="text-center py-4 text-red-500 font-medium">Erro ao carregar relatórios. Verifique o servidor.</td></tr>';
+          showToast(
+            "Erro ao carregar relatórios. O servidor está rodando?",
+            "error"
+          );
+        }
+      }
+
+      // ====================================================================
+      // LÓGICA DO VALIDADOR (VALIDADOR.JS)
+      // ====================================================================
+
+      function iniciarLeitor() {
+        if (html5QrCode) {
+          // Já está inicializado ou precisa ser parado e reiniciado (a função mostrarSecao faz o stop)
+          console.log("Leitor já inicializado ou sendo reiniciado.");
+          return;
+        }
+
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          rememberLastUsedCamera: true,
+        };
+
+        const qrReaderElement = document.getElementById("qr-reader");
+        if (!qrReaderElement) return;
+
+        // Inicializa a instância
+        html5QrCode = new Html5Qrcode("qr-reader");
+
+        const onScanSuccess = async (decodedText, decodedResult) => {
+          if (html5QrCode) {
+            // Para o scanner imediatamente após a leitura
+            html5QrCode
+              .stop()
+              .then(() => {
+                // Chama a validação
+                validarVoucher(decodedText);
+              })
+              .catch((err) => {
+                console.error("Erro ao parar o leitor:", err);
+                // Tenta validar mesmo que não consiga parar
+                validarVoucher(decodedText);
+              });
+          }
+        };
+
+        html5QrCode
+          .start({ facingMode: "environment" }, config, onScanSuccess)
+          .then(() => {
+            showToast("Leitor de QR Code iniciado com sucesso.", "info");
+          })
+          .catch((err) => {
+            console.error("Erro ao iniciar o leitor:", err);
+            const resultDiv = document.getElementById("qr-result");
+            resultDiv.className = "result-box invalid";
+            resultDiv.innerHTML =
+              "<h4>Erro:</h4><p>Não foi possível acessar a câmera. Verifique as permissões do navegador e se o HTTPS está ativo (necessário para câmeras).</p>";
+            showToast(
+              "Erro ao iniciar o scanner. Permissões de câmera negadas?",
+              "error"
+            );
+          });
+      }
+
+      async function validarVoucher(codigo) {
+        const resultDiv = document.getElementById("qr-result");
+        resultDiv.className = "result-box bg-gray-100 border border-gray-300";
+        resultDiv.innerHTML = "<p>Verificando voucher...</p>";
+
+        try {
+          const response = await fetch(`${API_URL}/voucher/validar`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ codigo: codigo }),
+          });
+          const result = await response.json();
+
+          resultDiv.className = "result-box"; // Reseta classes
+
+          let message = "";
+
+          if (result.status === "sucesso") {
+            resultDiv.classList.add("valid");
+            message = `<h4>Válido! ✅</h4><p>Voucher utilizado com sucesso.</p><p class="font-bold">Evento: ${result.evento_nome}</p><p>Código: ${codigo}</p>`;
+            showToast(
+              `Voucher VÁLIDO e USADO para ${result.evento_nome}!`,
+              "success"
+            );
+          } else if (result.status === "ja_utilizado") {
+            resultDiv.classList.add("invalid");
+            message = `<h4>Já Utilizado ❌</h4><p>Este voucher já foi usado.</p><p class="font-bold">Evento: ${result.evento_nome}</p><p>Código: ${codigo}</p>`;
+            showToast(`Voucher JÁ UTILIZADO: ${result.evento_nome}.`, "error");
+          } else if (result.status === "expirado") {
+            resultDiv.classList.add("invalid");
+            message = `<h4>Expirado ⚠️</h4><p>Este voucher não é mais válido.</p><p class="font-bold">Evento: ${result.evento_nome}</p><p>Código: ${codigo}</p>`;
+            showToast(`Voucher EXPIRADO: ${result.evento_nome}.`, "error");
+          } else {
+            resultDiv.classList.add("invalid");
+            message = `<h4>Não Encontrado ❌</h4><p>Este voucher não existe no sistema.</p><p>Código: ${codigo}</p>`;
+            showToast(`Voucher NÃO ENCONTRADO. Código: ${codigo}.`, "error");
+          }
+
+          resultDiv.innerHTML = message;
+        } catch (error) {
+          console.error("Erro na validação:", error);
+          resultDiv.className = "result-box invalid";
+          resultDiv.innerHTML = `<h4>Erro de Conexão:</h4><p>Não foi possível se conectar com o servidor da API.</p>`;
+          showToast("Erro de conexão com a API de validação.", "error");
+        } finally {
+          // Reinicia o leitor após um breve atraso para que o usuário veja o resultado
+          html5QrCode = null; // Zera a instância para ser recriada
+          setTimeout(iniciarLeitor, 3000);
+        }
+      }
+
+      // ====================================================================
+      // LÓGICA DE PARTÍCULAS (particles.js)
+      // ====================================================================
+
+      const canvas = document.getElementById("particles");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      let particles = [];
+      let backgroundParticles = [];
+
+      const getBgColor = () =>
+        getComputedStyle(document.body)
+          .getPropertyValue("--particle-bg-color")
+          .trim();
+      const getParticleColor = () =>
+        getComputedStyle(document.body)
+          .getPropertyValue("--interactive-particle-color")
+          .trim();
+      const getBackgroundParticleColor = () =>
+        getComputedStyle(document.body)
+          .getPropertyValue("--background-particle-color")
+          .trim();
+
+      class Particle {
+        constructor(x, y, color, size = 3, lifetime = 1) {
+          this.x = x;
+          this.y = y;
+          this.size = size;
+          this.color = color;
+          this.alpha = 1;
+          this.lifetime = lifetime;
+          this.speedX = (Math.random() - 0.5) * 2;
+          this.speedY = (Math.random() - 0.5) * 2;
+        }
+
+        update() {
+          this.x += this.speedX;
+          this.y += this.speedY;
+          this.alpha -= 0.02 * this.lifetime;
+          if (this.alpha <= 0) this.alpha = 0;
+        }
+
+        draw() {
+          ctx.save();
+          ctx.globalAlpha = this.alpha;
+          ctx.fillStyle = this.color;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
+      function handleParticles(list) {
+        for (let i = 0; i < list.length; i++) {
+          list[i].update();
+          list[i].draw();
+
+          if (list[i].alpha <= 0) {
+            list.splice(i, 1);
+            i--;
+          }
+        }
+      }
+
+      function initBackground() {
+        backgroundParticles = [];
+        for (let i = 0; i < 100; i++) {
+          let x = Math.random() * canvas.width;
+          let y = Math.random() * canvas.height;
+          backgroundParticles.push(
+            new Particle(x, y, getBackgroundParticleColor(), 2, 0.2)
+          );
+        }
+      }
+
+      window.addEventListener("mousemove", (e) => {
+        for (let i = 0; i < 2; i++) {
+          particles.push(new Particle(e.x, e.y, getParticleColor(), 3, 1));
+        }
+      });
+
+      window.addEventListener("click", (e) => {
+        for (let i = 0; i < 30; i++) {
+          particles.push(new Particle(e.x, e.y, getParticleColor(), 4, 1));
+        }
+      });
+
+      function animate() {
+        // Preenche a tela com a cor de fundo para criar o efeito de rastro suave
+        ctx.fillStyle = getBgColor();
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        handleParticles(backgroundParticles);
+        handleParticles(particles);
+
+        requestAnimationFrame(animate);
+      }
+
+      window.addEventListener("resize", () => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        initBackground();
+        // Garante que o scanner, se ativo, pare e possa ser reiniciado
+        if (document.getElementById("validador").classList.contains("active")) {
+          mostrarSecao("validador", true);
+        }
+      });
+    </script>
+  </body>
+</html>
