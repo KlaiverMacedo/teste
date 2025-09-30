@@ -1,33 +1,40 @@
+import os
 from flask import Flask, request, jsonify
 import mysql.connector
 from mysql.connector import Error
 from flask_cors import CORS
 
-# --- Configurações do seu banco de dados (Ajuste para produção!) ---
-# ESTE É O BLOCO QUE CONTÉM AS CREDENCIAIS E A LÓGICA DO BANCO
+# --- Configurações do seu banco de dados (Lendo Variáveis de Ambiente) ---
+# O Railway define estas variáveis. O Python as lê.
 DB_CONFIG = {
-    'user': 'root',
-    'password': '132318', # Senha do MySQL
-    'host': '127.0.0.1',
-    'database': 'voucher', # Nome do banco de dados
-    'port': 3306 
+    'user': os.environ.get('DB_USER'),
+    'password': os.environ.get('DB_PASSWORD'),
+    'host': os.environ.get('DB_HOST'),
+    'database': os.environ.get('DB_DATABASE'),
+    # Converte a porta para inteiro e usa a porta 3306 como fallback seguro
+    'port': int(os.environ.get('DB_PORT', 3306)),
+    # Adiciona um timeout maior, útil em conexões de nuvem
+    'connection_timeout': 30 
 }
 
 app = Flask(__name__)
-# Permite que o frontend (que rodará em outra porta/domínio) acesse esta API
+# Permite que o frontend (Netlify) acesse esta API
 CORS(app) 
-
-# Variável de ambiente (ajuste conforme o ambiente de produção)
-API_BASE_URL = "http://127.0.0.1:5000"
 
 # --- Função de Conexão com o Banco de Dados ---
 def get_db_connection():
-    """Tenta estabelecer a conexão com o MySQL."""
+    """Tenta estabelecer a conexão com o MySQL usando variáveis de ambiente."""
     try:
+        # Verifica se todas as credenciais essenciais estão presentes
+        if not all(DB_CONFIG.get(key) for key in ['user', 'password', 'host', 'database']):
+            print("ERRO DE CONFIG: Variáveis de ambiente do banco de dados estão faltando ou incompletas.")
+            return None
+            
         conn = mysql.connector.connect(**DB_CONFIG)
         return conn
     except Error as e:
-        print(f"Erro ao conectar ao MySQL: {e}")
+        # Este erro deve aparecer nos Logs do Railway se a conexão falhar
+        print(f"ERRO DE CONEXÃO AO MySQL: {e}")
         return None
 
 # --- Rotas da API ---
@@ -40,12 +47,12 @@ def cadastrar_evento():
     cursor = conn.cursor()
     try:
         data = request.json
-        # A data_validade é configurada para 30 dias após a data do evento (como no seu código original)
         sql = "INSERT INTO eventos (nome, data_evento, data_validade) VALUES (%s, %s, DATE_ADD(%s, INTERVAL 30 DAY))"
         cursor.execute(sql, (data['nome'], data['data'], data['data']))
         conn.commit()
         return jsonify({'sucesso': 'Evento cadastrado', 'id': cursor.lastrowid}), 201
     except Error as e:
+        print(f"Erro ao cadastrar evento: {e}")
         return jsonify({'erro': str(e)}), 500
     finally:
         cursor.close()
@@ -53,7 +60,7 @@ def cadastrar_evento():
 
 @app.route('/vouchers/gerar', methods=['POST'])
 def gerar_vouchers_endpoint():
-    """Gera uma quantidade específica de vouchers para um evento."""
+    """Gera uma quantidade específica de vouchers para um evento (chama SP GerarVouchers)."""
     conn = get_db_connection()
     if conn is None: return jsonify({'erro': 'Falha na conexão com o banco de dados'}), 500
     cursor = conn.cursor(dictionary=True)
@@ -62,7 +69,7 @@ def gerar_vouchers_endpoint():
         evento_id = data['evento_id']
         quantidade = data['quantidade']
         
-        # Chama a Stored Procedure 'GerarVouchers' no MySQL
+        # Chama a Stored Procedure 'GerarVouchers'
         cursor.callproc('GerarVouchers', [evento_id, quantidade])
         conn.commit()
         
@@ -72,19 +79,19 @@ def gerar_vouchers_endpoint():
             v.id,
             v.codigo,
             e.nome AS nome_evento,
-            DATE_FORMAT(e.data_evento, '%d/%m/%Y') AS data_formatada
+            DATE_FORMAT(e.data_evento, '%%d/%%m/%%Y') AS data_formatada
         FROM vouchers v
         INNER JOIN eventos e ON v.evento_id = e.id
         WHERE v.evento_id = %s
         ORDER BY v.criado_em DESC
         LIMIT %s
         """
-        # O limite é aplicado à ordem inversa para pegar os últimos gerados
         cursor.execute(sql_query, (evento_id, quantidade))
         vouchers_gerados = cursor.fetchall()
         
         return jsonify({'sucesso': f'{quantidade} vouchers gerados com sucesso.', 'vouchers': vouchers_gerados}), 200
     except Error as e:
+        print(f"Erro ao gerar vouchers: {e}")
         return jsonify({'erro': str(e)}), 500
     finally:
         cursor.close()
@@ -92,18 +99,18 @@ def gerar_vouchers_endpoint():
 
 @app.route('/relatorios', methods=['GET'])
 def relatorio_eventos():
-    """Retorna um relatório consolidado de todos os eventos."""
+    """Retorna um relatório consolidado (chama SP RelatorioEventos)."""
     conn = get_db_connection()
     if conn is None: return jsonify({'erro': 'Falha na conexão com o banco de dados'}), 500
     cursor = conn.cursor(dictionary=True)
     try:
-        # Chama a Stored Procedure 'RelatorioEventos'
         cursor.callproc('RelatorioEventos')
         relatorio = []
         for result in cursor.stored_results():
             relatorio = result.fetchall()
         return jsonify(relatorio), 200
     except Error as e:
+        print(f"Erro ao gerar relatório: {e}")
         return jsonify({'erro': str(e)}), 500
     finally:
         cursor.close()
@@ -111,7 +118,7 @@ def relatorio_eventos():
 
 @app.route('/eventos', methods=['GET'])
 def listar_eventos():
-    """Lista todos os eventos cadastrados para uso em dropdowns."""
+    """Lista todos os eventos cadastrados."""
     conn = get_db_connection()
     if conn is None: return jsonify({'erro': 'Falha na conexão com o banco de dados'}), 500
     cursor = conn.cursor(dictionary=True)
@@ -120,6 +127,7 @@ def listar_eventos():
         eventos = cursor.fetchall()
         return jsonify(eventos), 200
     except Error as e:
+        print(f"Erro ao listar eventos: {e}")
         return jsonify({'erro': str(e)}), 500
     finally:
         cursor.close()
@@ -127,7 +135,7 @@ def listar_eventos():
 
 @app.route('/vouchers/<int:evento_id>', methods=['GET'])
 def acessar_vouchers(evento_id):
-    """Retorna todos os vouchers de um evento específico para impressão."""
+    """Retorna todos os vouchers de um evento específico."""
     conn = get_db_connection()
     if conn is None: return jsonify({'erro': 'Falha na conexão com o banco de dados'}), 500
     cursor = conn.cursor(dictionary=True)
@@ -137,7 +145,7 @@ def acessar_vouchers(evento_id):
             v.id,
             v.codigo,
             e.nome AS nome_evento,
-            DATE_FORMAT(e.data_evento, '%d/%m/%Y') AS data_formatada
+            DATE_FORMAT(e.data_evento, '%%d/%%m/%%Y') AS data_formatada
         FROM vouchers v
         INNER JOIN eventos e ON v.evento_id = e.id
         WHERE v.evento_id = %s
@@ -151,6 +159,7 @@ def acessar_vouchers(evento_id):
             
         return jsonify({'sucesso': 'Vouchers encontrados.', 'vouchers': vouchers_existentes}), 200
     except Error as e:
+        print(f"Erro ao acessar vouchers: {e}")
         return jsonify({'erro': str(e)}), 500
     finally:
         cursor.close()
@@ -158,7 +167,7 @@ def acessar_vouchers(evento_id):
 
 @app.route('/voucher/validar', methods=['POST'])
 def validar_voucher():
-    """Valida um voucher usando o código e registra o uso se for válido."""
+    """Valida um voucher usando a Stored Procedure ValidarVoucher."""
     codigo = request.json.get('codigo')
     if not codigo:
         return jsonify({'erro': 'Código do voucher não fornecido'}), 400
@@ -169,28 +178,29 @@ def validar_voucher():
     cursor = conn.cursor(dictionary=True)
     try:
         # Chama a Stored Procedure 'ValidarVoucher'
-        # O resultado da SP deve ser o status do voucher (sucesso, ja_utilizado, expirado, etc.)
         cursor.callproc('ValidarVoucher', [codigo])
-        conn.commit() 
-        
         result = None
         for r in cursor.stored_results():
-            result = r.fetchone() 
-            
+            result = r.fetchone()
+        
+        # A SP retorna um dicionário com 'status' e 'evento_nome'
         if result:
-            # Retorna o resultado da SP (ex: {'status': 'sucesso', 'evento_nome': 'Nome do Evento'})
-            return jsonify(result), 200
+            return jsonify(result)
         else:
-            # Caso a SP não retorne resultado (voucher não existe)
-            return jsonify({'status': 'voucher_nao_encontrado', 'evento_nome': None}), 200
+            # Caso a SP não retorne resultado (o que não deve acontecer, mas é uma segurança)
+            return jsonify({'status': 'erro_desconhecido', 'evento_nome': None}), 500
             
     except Error as e:
-        # Em caso de erro do SQL
+        print(f"Erro ao validar voucher: {e}")
         return jsonify({'erro': str(e)}), 500
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
 
 if __name__ == '__main__':
-    # Roda a aplicação Flask na porta 5000, conforme esperado pelo frontend
-    app.run(debug=True, host='127.0.0.1', port=5000)
+    # Define a porta que o Railway espera, ou 5000 se rodando localmente
+    port = int(os.environ.get('PORT', 5000))
+    # Para rodar localmente sem gunicorn
+    if 'PORT' not in os.environ: 
+        app.run(debug=True, host='0.0.0.0', port=port)
+    # Em produção, o Gunicorn usará o comando no Procfile
