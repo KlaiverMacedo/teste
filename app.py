@@ -5,7 +5,7 @@ from mysql.connector import Error
 from flask_cors import CORS
 
 # --- Configurações do seu banco de dados (Lendo Variáveis de Ambiente) ---
-# O Railway define estas variáveis. O Python as lê.
+# O código lê as variáveis que você configurou no Railway (DB_HOST, DB_USER, etc.)
 DB_CONFIG = {
     'user': os.environ.get('DB_USER'),
     'password': os.environ.get('DB_PASSWORD'),
@@ -13,7 +13,7 @@ DB_CONFIG = {
     'database': os.environ.get('DB_DATABASE'),
     # Converte a porta para inteiro e usa a porta 3306 como fallback seguro
     'port': int(os.environ.get('DB_PORT', 3306)),
-    # Adiciona um timeout maior, útil em conexões de nuvem
+    # Adiciona um timeout maior, útil em ambientes de nuvem
     'connection_timeout': 30 
 }
 
@@ -34,10 +34,24 @@ def get_db_connection():
         return conn
     except Error as e:
         # Este erro deve aparecer nos Logs do Railway se a conexão falhar
-        print(f"ERRO DE CONEXÃO AO MySQL: {e}")
+        print(f"ERRO CRÍTICO DE CONEXÃO AO MySQL: {e}")
         return None
 
-# --- Rotas da API ---
+# --- ROTAS DE TESTE E SAÚDE ---
+
+@app.route('/', methods=['GET'])
+def health_check():
+    """Retorna um JSON simples para confirmar que o servidor Flask está rodando."""
+    # Tenta fazer uma conexão simples para verificar a saúde do banco de dados também
+    conn = get_db_connection()
+    if conn:
+        conn.close()
+        return jsonify({'status': 'ok', 'servico': 'API de Vouchers (Railway)'}), 200
+    else:
+        return jsonify({'status': 'erro_db', 'servico': 'API de Vouchers (Railway)'}), 500
+
+
+# --- ROTAS DA API DE VOUCHERS ---
 
 @app.route('/evento', methods=['POST'])
 def cadastrar_evento():
@@ -104,6 +118,7 @@ def relatorio_eventos():
     if conn is None: return jsonify({'erro': 'Falha na conexão com o banco de dados'}), 500
     cursor = conn.cursor(dictionary=True)
     try:
+        # Chama a Stored Procedure 'RelatorioEventos'
         cursor.callproc('RelatorioEventos')
         relatorio = []
         for result in cursor.stored_results():
@@ -187,7 +202,7 @@ def validar_voucher():
         if result:
             return jsonify(result)
         else:
-            # Caso a SP não retorne resultado (o que não deve acontecer, mas é uma segurança)
+            # Não deve acontecer, mas é uma segurança
             return jsonify({'status': 'erro_desconhecido', 'evento_nome': None}), 500
             
     except Error as e:
@@ -203,4 +218,3 @@ if __name__ == '__main__':
     # Para rodar localmente sem gunicorn
     if 'PORT' not in os.environ: 
         app.run(debug=True, host='0.0.0.0', port=port)
-    # Em produção, o Gunicorn usará o comando no Procfile
